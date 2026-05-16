@@ -1,0 +1,82 @@
+from __future__ import annotations
+
+from pathlib import Path
+import json
+import sys
+import unittest
+from unittest.mock import patch
+
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+
+from app.ai_provider import FallbackRewriteProvider, OllamaProvider, clean_text
+from app.config import AppConfig
+
+
+class FakeResponse:
+    def __enter__(self) -> "FakeResponse":
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return json.dumps(
+            {
+                "response": json.dumps(
+                    {"options": ["One.", "Two.", "Three."]}
+                )
+            }
+        ).encode("utf-8")
+
+
+class RewriteEngineTests(unittest.TestCase):
+    def test_clean_text_fixes_sample_sentence(self) -> None:
+        text = "i need this report finish today because client waiting"
+        self.assertEqual(
+            clean_text(text),
+            "I need this report finished today because the client is waiting.",
+        )
+
+    def test_fallback_returns_three_formal_options(self) -> None:
+        provider = FallbackRewriteProvider()
+        options = provider.rewrite(
+            "i need this report finish today because client waiting",
+            "Formal",
+        )
+        self.assertEqual(len(options), 3)
+        self.assertEqual(len(set(options)), 3)
+        self.assertTrue(all(option.endswith(".") for option in options))
+
+    def test_fallback_preserves_numbers(self) -> None:
+        provider = FallbackRewriteProvider()
+        options = provider.rewrite("i need 3 files by May 20", "Assertive")
+        self.assertEqual(len(options), 3)
+        self.assertTrue(all("3" in option for option in options))
+        self.assertTrue(all("May 20" in option for option in options))
+
+    def test_ollama_payload_disables_thinking(self) -> None:
+        captured: dict[str, object] = {}
+
+        def fake_urlopen(request: object, timeout: int) -> FakeResponse:
+            captured["timeout"] = timeout
+            captured["payload"] = json.loads(request.data.decode("utf-8"))
+            return FakeResponse()
+
+        config = AppConfig(ai_provider="ollama", ollama_timeout_seconds=7)
+        with patch("app.ai_provider.urllib.request.urlopen", fake_urlopen):
+            options = OllamaProvider(config).rewrite("hello there", "Friendly")
+
+        self.assertEqual(options, ["One.", "Two.", "Three."])
+        self.assertEqual(captured["timeout"], 7)
+        payload = captured["payload"]
+        self.assertIs(payload["think"], False)
+        self.assertIs(payload["stream"], False)
+        self.assertEqual(payload["format"], "json")
+        self.assertIn("internally analyze", payload["prompt"])
+        self.assertIn("Do not output this analysis", payload["prompt"])
+
+
+if __name__ == "__main__":
+    unittest.main()

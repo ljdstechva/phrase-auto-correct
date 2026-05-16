@@ -1,0 +1,10 @@
+.venv/
+source/.venv/
+__pycache__/
+*.py[cod]
+sources/logs/
+sources/pip-cache/
+sources/test-temp/
+source/sources/logs/
+source/sources/pip-cache/
+source/sources/test-temp/
