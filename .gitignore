@@ -8,3 +8,5 @@ sources/test-temp/
 source/sources/logs/
 source/sources/pip-cache/
 source/sources/test-temp/
+.playwright-mcp/
+source/config.local.json

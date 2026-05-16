@@ -14,14 +14,14 @@ The wrappers call `source\install.ps1` so installation still runs from the clean
 ## Modules
 
 - `app/main.py`: application controller, lifecycle, hotkey flow, tray callbacks.
-- `app/config.py`: config defaults and `config.json` loading.
+- `app/config.py`: config defaults plus `config.json` and ignored `config.local.json` loading.
 - `app/windows_api.py`: Win32 API wrappers for hotkeys, keyboard input, foreground window, cursor, mutex, and clipboard sequence numbers.
 - `app/clipboard_manager.py`: clipboard snapshot, restore, text read/write.
 - `app/selection.py`: selected text capture and replacement orchestration.
 - `app/hotkey.py`: global hotkey parser and listener thread.
-- `app/ui.py`: Tkinter tone selection, loading, option, and error popups.
+- `app/ui.py`: Tkinter tone selection, loading, option, error, and settings windows.
 - `app/tray.py`: pystray icon and right-click menu.
-- `app/ai_provider.py`: provider interface, Ollama provider, and local fallback provider.
+- `app/ai_provider.py`: provider interface, OpenAI-compatible Responses API provider, and local fallback provider.
 - `app/logging_setup.py`: local rotating log setup.
 - `app/single_instance.py`: named mutex to avoid duplicate app instances.
 
@@ -57,11 +57,10 @@ Rules enforced by providers and validation:
 
 Configured providers:
 
+- `openai`: default; calls an OpenAI-compatible Responses API endpoint with a strict JSON schema.
 - `fallback`: deterministic offline provider.
-- `ollama`: local Ollama HTTP provider.
-- `auto`: default; try local Ollama with `qwen3.5:9b` if available, otherwise fall back locally.
 
-The Ollama prompt asks the model to internally analyze the user's intent, message type, protected terms, and grammar issues before writing. The analysis is not returned to the UI; only the three final rewrite options are parsed.
+The system prompt is brief, tone-aware, and editable from tray Settings. `{tone}` is replaced for each activation before the model call. The API key is stored only in ignored `config.local.json`.
 
 ## Clipboard Handling
 
@@ -95,25 +94,15 @@ Palette states:
 
 Right-click tray menu:
 
+- `Settings`: opens model, API key, base URL, provider, and system prompt settings.
 - `Uninstall`: confirms with the user, launches `uninstall.ps1`, then exits.
 - `Exit`: stops the tray icon, unregisters the hotkey, and exits the Tk loop.
 
 ## Startup Behavior
 
-The parent `install.ps1` wrapper forwards supported switches to `source\install.ps1`. The source installer creates a per-user Startup folder shortcut named `Phrase Auto-correct.lnk` that targets `source\.venv\Scripts\pythonw.exe` and runs `-m app.main` with `source\` as the working directory.
+The parent `install.ps1` wrapper runs `source\install.ps1`. The source installer creates a per-user Startup folder shortcut named `Phrase Auto-correct.lnk` that targets `source\.venv\Scripts\pythonw.exe` and runs `-m app.main` with `source\` as the working directory.
 
 `source\uninstall.ps1` removes only this shortcut and stops only Python processes whose command line points to this project folder and `app.main`.
-
-## Install-Time AI Model Setup
-
-`install.ps1` can optionally pull the configured recommended model through Ollama:
-
-- Interactive install asks whether to download `qwen3.5:9b`.
-- `-PullModel` pulls without asking.
-- `-SkipModelPrompt` skips the prompt.
-- `-InstallOllamaWithWinget` lets the installer offer WinGet installation if Ollama is not found.
-
-The model pull uses the official `ollama pull` command and does not change Windows networking settings. Download speed is left to Ollama and the user's network.
 
 ## Error Handling
 
@@ -121,5 +110,5 @@ The model pull uses the official `ollama pull` command and does not change Windo
 - Too long: show max length error.
 - Clipboard locked or blocked: show helpful clipboard error.
 - Hotkey conflict: show hotkey registration error and config guidance.
-- AI backend failure: show backend error for `ollama`; for `auto`, use fallback.
+- AI backend failure: show OpenAI-compatible API error and point the user to tray Settings.
 - Replacement blocked: show replacement error and restore clipboard snapshot if possible.

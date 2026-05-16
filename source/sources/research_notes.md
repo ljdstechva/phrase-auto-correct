@@ -1,5 +1,7 @@
 # Research Notes
 
+Update: The earlier Ollama/Qwen local-model plan in these notes is historical. The current implementation uses a tray-configured OpenAI-compatible Responses API provider, stores the API key in ignored `config.local.json`, and no longer downloads local AI models during install.
+
 ## Chosen Stack
 
 Chosen stack: Python 3.14, Tkinter, pystray, Pillow, and direct Windows APIs through `ctypes`.
@@ -28,6 +30,8 @@ Why this stack was chosen:
 - Python Tkinter documentation: https://docs.python.org/3/library/tkinter.html
 - pystray documentation: https://pystray.readthedocs.io/en/latest/usage.html
 - Pillow Image documentation: https://pillow.readthedocs.io/en/stable/reference/Image.html
+- OpenAI Responses API reference: https://platform.openai.com/docs/api-reference/responses/create
+- OpenAI Structured Outputs guide: https://platform.openai.com/docs/guides/structured-outputs
 - Ollama Windows and Generate API documentation:
   - https://docs.ollama.com/windows
   - https://docs.ollama.com/api/generate

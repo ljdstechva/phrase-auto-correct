@@ -14,19 +14,5 @@ if (-not (Test-Path -LiteralPath $SourceInstall)) {
     exit 1
 }
 
-$ForwardArgs = @{}
-if ($PullModel) {
-    $ForwardArgs["PullModel"] = $true
-}
-if ($SkipModelPrompt) {
-    $ForwardArgs["SkipModelPrompt"] = $true
-}
-if ($InstallOllamaWithWinget) {
-    $ForwardArgs["InstallOllamaWithWinget"] = $true
-}
-if ($PSBoundParameters.ContainsKey("OllamaModel")) {
-    $ForwardArgs["OllamaModel"] = $OllamaModel
-}
-
-& $SourceInstall @ForwardArgs
+& $SourceInstall
 exit $LASTEXITCODE

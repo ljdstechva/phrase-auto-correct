@@ -18,10 +18,12 @@ class TrayIcon:
     def __init__(
         self,
         project_root: Path,
+        on_settings: Callable[[], None],
         on_exit: Callable[[], None],
         on_uninstall: Callable[[], None],
     ) -> None:
         self.project_root = project_root
+        self.on_settings = on_settings
         self.on_exit = on_exit
         self.on_uninstall = on_uninstall
         self.icon: pystray.Icon | None = None
@@ -31,6 +33,7 @@ class TrayIcon:
         """Start the tray icon in a Windows-safe background thread."""
 
         menu = pystray.Menu(
+            pystray.MenuItem("Settings", self._handle_settings),
             pystray.MenuItem("Uninstall", self._handle_uninstall),
             pystray.MenuItem("Exit", self._handle_exit),
         )
@@ -54,6 +57,9 @@ class TrayIcon:
             self.icon.stop()
         if self.thread and self.thread.is_alive():
             self.thread.join(timeout=2)
+
+    def _handle_settings(self, _icon: pystray.Icon, _item: object) -> None:
+        self.on_settings()
 
     def _handle_exit(self, _icon: pystray.Icon, _item: object) -> None:
         self.on_exit()

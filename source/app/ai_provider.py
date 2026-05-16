@@ -1,4 +1,4 @@
-"""Rewrite providers for local fallback and optional Ollama."""
+"""Rewrite providers for OpenAI-compatible rephrasing and local fallback."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import re
 import urllib.error
 import urllib.request
 
-from .config import AppConfig, SUPPORTED_TONES
+from .config import AppConfig, DEFAULT_SYSTEM_PROMPT_TEMPLATE, SUPPORTED_TONES
 
 
 class RewriteError(RuntimeError):
@@ -35,64 +35,94 @@ class RewriteEngine:
         provider_name = self.config.ai_provider
         if provider_name == "fallback":
             return _validate_options(FallbackRewriteProvider().rewrite(text, tone))
-
-        if provider_name == "ollama":
-            return _validate_options(OllamaProvider(self.config).rewrite(text, tone))
-
-        try:
-            return _validate_options(OllamaProvider(self.config).rewrite(text, tone))
-        except RewriteError:
-            return _validate_options(FallbackRewriteProvider().rewrite(text, tone))
+        return _validate_options(OpenAIResponsesProvider(self.config).rewrite(text, tone))
 
 
 @dataclass
-class OllamaProvider(RewriteProvider):
-    """Local Ollama provider using the Generate API."""
+class OpenAIResponsesProvider(RewriteProvider):
+    """OpenAI-compatible provider using the Responses API."""
 
     config: AppConfig
 
     def rewrite(self, text: str, tone: str) -> list[str]:
-        prompt = _build_ollama_prompt(text, tone)
+        api_key = self.config.openai_api_key.strip()
+        if not api_key:
+            raise RewriteError(
+                "OpenAI API key is missing. Right-click the tray icon, "
+                "open Settings, and enter your API key."
+            )
+
         payload = {
-            "model": self.config.ollama_model,
-            "prompt": prompt,
-            "stream": False,
-            "think": False,
-            "format": "json",
-            "options": {
-                "temperature": 0.25,
-                "top_p": 0.9,
-                "num_predict": 700,
+            "model": self.config.openai_model,
+            "input": [
+                {
+                    "role": "system",
+                    "content": _system_prompt_for_tone(
+                        self.config.system_prompt,
+                        tone,
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": f"Tone: {tone}\nSelected text:\n{text}",
+                },
+            ],
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "rewrite_options",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "options": {
+                                "type": "array",
+                                "minItems": 3,
+                                "maxItems": 3,
+                                "items": {"type": "string"},
+                            }
+                        },
+                        "required": ["options"],
+                    },
+                }
             },
+            "max_output_tokens": 700,
         }
         request = urllib.request.Request(
-            self.config.ollama_url,
+            self.config.openai_base_url,
             data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
             method="POST",
         )
         try:
             with urllib.request.urlopen(
                 request,
-                timeout=self.config.ollama_timeout_seconds,
+                timeout=self.config.openai_timeout_seconds,
             ) as response:
                 raw = response.read().decode("utf-8")
+        except urllib.error.HTTPError as exc:
+            message = _http_error_message(exc)
+            raise RewriteError(f"OpenAI request failed: {message}") from exc
         except (urllib.error.URLError, TimeoutError) as exc:
             raise RewriteError(
-                "Ollama is not available. Start Ollama or set "
-                "aiProvider to fallback in config.json."
+                "OpenAI is not reachable. Check your internet connection, "
+                "API key, model, and base URL in Settings."
             ) from exc
 
         try:
             data = json.loads(raw)
-            content = data["response"]
+            content = _extract_response_text(data)
             parsed = json.loads(content)
             options = parsed.get("options")
         except (KeyError, TypeError, json.JSONDecodeError) as exc:
-            raise RewriteError("Ollama returned an invalid response.") from exc
+            raise RewriteError("OpenAI returned an invalid response.") from exc
 
         if not isinstance(options, list):
-            raise RewriteError("Ollama response did not contain options.")
+            raise RewriteError("OpenAI response did not contain options.")
         return [str(option).strip() for option in options]
 
 
@@ -105,38 +135,45 @@ class FallbackRewriteProvider(RewriteProvider):
         return _ensure_three(candidates, cleaned)
 
 
-def _build_ollama_prompt(text: str, tone: str) -> str:
-    tones = ", ".join(SUPPORTED_TONES)
-    return (
-        "You are an expert English grammar, clarity, and rephrasing editor.\n"
-        "Task: rewrite the selected text into exactly three options.\n"
-        f"Selected tone: {tone}. Supported tones: {tones}.\n\n"
-        "First, internally analyze the user's likely intent before writing:\n"
-        "- What is the user trying to say or request?\n"
-        "- Is the message informing, asking, apologizing, warning, "
-        "confirming, or coordinating?\n"
-        "- Which names, numbers, dates, links, product names, and technical "
-        "terms must remain unchanged?\n"
-        "- What grammar, punctuation, clarity, or phrasing issues need fixing?\n"
-        "Do not output this analysis.\n\n"
-        "Rewrite rules:\n"
-        "- Preserve the user's intended meaning and relationship context.\n"
-        "- Correct grammar, spelling, clarity, punctuation, and phrasing.\n"
-        "- Match the selected tone naturally without exaggeration.\n"
-        "- Do not add facts, promises, emotions, urgency, or details that are "
-        "not implied by the original text.\n"
-        "- Do not change names, numbers, links, dates, or technical terms "
-        "unless grammar clearly requires it.\n"
-        "- Keep the rewrite concise. Slight expansion is allowed only when it "
-        "makes the sentence grammatical or the selected tone clearer.\n"
-        "- Make the three options visibly different from each other.\n"
-        "- Do not return the original sentence unchanged if it contains "
-        "grammar or clarity errors.\n"
-        "Return JSON only in this exact shape: "
-        '{"options":["first","second","third"]}\n'
-        "\nSelected text:\n"
-        f"{text}"
-    )
+def _system_prompt_for_tone(template: str, tone: str) -> str:
+    prompt = (template or DEFAULT_SYSTEM_PROMPT_TEMPLATE).replace("{tone}", tone)
+    return prompt.strip()
+
+
+def _extract_response_text(data: dict[str, object]) -> str:
+    output_text = data.get("output_text")
+    if isinstance(output_text, str) and output_text.strip():
+        return output_text
+
+    parts: list[str] = []
+    for item in data.get("output", []):
+        if not isinstance(item, dict):
+            continue
+        for content in item.get("content", []):
+            if not isinstance(content, dict):
+                continue
+            if content.get("type") in {"output_text", "text"}:
+                text = content.get("text")
+                if isinstance(text, str):
+                    parts.append(text)
+            if content.get("type") == "refusal":
+                raise RewriteError("OpenAI refused to rewrite this text.")
+    joined = "".join(parts).strip()
+    if not joined:
+        raise RewriteError("OpenAI returned an empty response.")
+    return joined
+
+
+def _http_error_message(exc: urllib.error.HTTPError) -> str:
+    try:
+        body = exc.read().decode("utf-8", errors="replace")
+        data = json.loads(body)
+        error = data.get("error")
+        if isinstance(error, dict) and error.get("message"):
+            return str(error["message"])
+    except Exception:
+        pass
+    return f"HTTP {exc.code}"
 
 
 COMMON_FIXES: tuple[tuple[str, str], ...] = (

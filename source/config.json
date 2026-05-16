@@ -1,12 +1,13 @@
 {
   "hotkey": "Ctrl+Space",
-  "aiProvider": "auto",
-  "ollamaModel": "qwen3.5:9b",
-  "ollamaUrl": "http://127.0.0.1:11434/api/generate",
+  "aiProvider": "openai",
+  "openaiModel": "gpt-5",
+  "openaiBaseUrl": "https://api.openai.com/v1/responses",
+  "systemPrompt": "You are an expert English rephrasing editor. Rewrite the selected text in a {tone} tone. Preserve meaning, names, numbers, links, dates, and technical terms. Correct grammar, punctuation, clarity, and phrasing. Do not add facts. Return JSON only with exactly three concise, distinct options: {\"options\":[\"...\",\"...\",\"...\"]}.",
   "maxTextLength": 4000,
   "startOnBoot": true,
   "debugLogging": false,
   "copyTimeoutMs": 550,
   "pasteRestoreDelayMs": 350,
-  "ollamaTimeoutSeconds": 45
+  "openaiTimeoutSeconds": 45
 }

@@ -16,7 +16,7 @@ from typing import NoReturn, TypeAlias
 from . import APP_NAME
 from .ai_provider import RewriteEngine, RewriteError
 from .clipboard_manager import ClipboardManager
-from .config import AppConfig, load_config
+from .config import AppConfig, load_config, save_local_ai_settings
 from .hotkey import HotkeyListener, parse_hotkey
 from .logging_setup import setup_logging
 from .selection import CaptureResult, SelectionService
@@ -67,6 +67,7 @@ class PhraseAutoCorrectApp:
         )
         self.tray = TrayIcon(
             project_root,
+            on_settings=lambda: self.root.after(0, self.show_settings),
             on_exit=lambda: self.root.after(0, self.shutdown),
             on_uninstall=lambda: self.root.after(0, self.uninstall_from_tray),
         )
@@ -223,6 +224,26 @@ class PhraseAutoCorrectApp:
         """Show an error and reset after dismissal."""
 
         self.ui.show_error(message, self.cancel_flow)
+
+    def show_settings(self) -> None:
+        """Open tray settings for AI model and API key."""
+
+        self.ui.show_settings(self.config, self.save_settings)
+
+    def save_settings(self, settings: dict[str, str]) -> None:
+        """Persist AI settings and update the running app."""
+
+        self.config = save_local_ai_settings(
+            self.project_root,
+            ai_provider=settings["ai_provider"],
+            openai_model=settings["openai_model"],
+            openai_api_key=settings["openai_api_key"],
+            openai_base_url=settings["openai_base_url"],
+            system_prompt=settings["system_prompt"],
+        )
+        self.selection.config = self.config
+        self.rewriter = RewriteEngine(self.config)
+        self.logger.info("AI settings updated")
 
     def uninstall_from_tray(self) -> None:
         """Launch uninstall script from the tray menu after confirmation."""

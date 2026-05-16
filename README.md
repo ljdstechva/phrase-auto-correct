@@ -6,11 +6,7 @@ Install the Windows tray app from this folder:
 .\install.ps1
 ```
 
-To download the recommended local AI model during install:
-
-```powershell
-.\install.ps1 -PullModel
-```
+After install, right-click the tray icon and open `Settings` to enter the model and API key.
 
 The app files, configuration, tests, logs, screenshots, and maintenance scripts are kept in `source\` so this folder stays simple.
 

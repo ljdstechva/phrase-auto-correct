@@ -5,19 +5,19 @@ Test date: 2026-05-16
 | Test | Result | Notes |
 | --- | --- | --- |
 | Python syntax compile | Pass | `python -m compileall app sources\tests` completed successfully. |
-| Unit tests | Pass | 9 tests passed with `python -m unittest discover -s sources\tests -v`. |
+| Unit tests | Pass | 10 tests passed with `python -m unittest discover -s sources\tests -v`. |
 | Clipboard set/read/restore | Pass | Unit test temporarily set text, read it back, and restored the prior snapshot. |
 | Fallback rewrite quality sample | Pass | Sample sentence becomes `I need this report finished today because the client is waiting.` and returns exactly three options. |
 | Number/date preservation | Pass | Unit test confirmed `3` and `May 20` remain in all fallback options. |
 | Hotkey parser | Pass | `Ctrl+Space`, `Ctrl+Shift+F9`, and invalid hotkey cases tested. |
-| App self-test | Pass | `.venv\Scripts\python.exe -m app.main --self-test` completed successfully and now uses the fallback provider so it does not depend on Ollama availability. |
-| Local Ollama availability | Not installed | `ollama` was not found on PATH, so the app will use the local fallback until Ollama is installed and `qwen3.5:9b` is pulled. |
+| App self-test | Pass | `.venv\Scripts\python.exe -m app.main --self-test` completed successfully and uses the fallback provider so it does not require an API key. |
+| Ollama/local model removal | Pass | The installer no longer prompts for or downloads Ollama/Qwen models. AI provider setup moved to tray Settings. |
 | Install script | Pass | `install.ps1` created `.venv`, installed dependencies locally, registered Startup shortcut, and started the app. |
-| Install model skip mode | Pass | `install.ps1 -SkipModelPrompt` completed successfully without attempting the 6.6 GB model download. |
+| Obsolete install switches | Pass | Old model-related install switches are still accepted for compatibility but are ignored. |
 | Clean parent folder layout | Pass | Parent folder now contains only `install.ps1`, `install.bat`, `README.md`, hidden `.gitignore`, and `source\`. App source, scripts, config, virtual environment, logs, tests, and screenshots are inside `source\`. |
 | Root PowerShell installer wrapper | Pass | Parent `install.ps1 -SkipModelPrompt` forwards named parameters to `source\install.ps1` and completed successfully after fixing positional argument forwarding. |
 | Batch installer argument forwarding | Pass | Parent `install.bat -SkipModelPrompt` forwarded arguments to PowerShell and completed successfully from the simplified parent folder. |
-| Install model selection | Pass | Installer now supports interactive model selection, `-PullModel`, `-SkipModelPrompt`, and optional `-InstallOllamaWithWinget`. |
+| Tray Settings menu | Pass | Tray menu now includes `Settings` for provider, model, API key, base URL, and system prompt configuration. |
 | Run script idempotency | Pass | Running `run.ps1` again reported the app was already running. |
 | Startup registration | Pass | Startup shortcut exists and points to `source\.venv\Scripts\pythonw.exe -m app.main` with `source\` as the working directory. |
 | Running process | Pass | App is running under `pythonw.exe`; Windows shows a venv launcher process plus the base Python process for one logical app launch. |
@@ -26,11 +26,12 @@ Test date: 2026-05-16
 | Folder boundary | Pass | Source, tests, logs, cache, and generated files are inside this project folder. Only the app Startup shortcut was created outside. |
 | Sensitive text logging | Pass | Logs contain lifecycle and error class/message only; selected text is not logged. |
 | Context-menu-style palette compile | Pass | New non-activating palette compiled successfully after replacing the focused dialog UI. |
-| Default model config | Pass | Default config now uses `aiProvider: auto` and `ollamaModel: qwen3.5:9b`. |
+| Default model config | Pass | Default config now uses `aiProvider: openai`, `openaiModel: gpt-5`, and the OpenAI Responses API base URL. |
+| Local settings persistence | Pass | Unit test verifies tray settings can persist model, API key, base URL, and system prompt to ignored `config.local.json`. |
 | Non-blocking hotkey capture | Pass | Capture now runs on `PhraseCaptureWorker`; Tkinter stays on the main thread and no rewrite work starts during hotkey handling. |
 | UI Automation selection capture | Pass | Added UI Automation selected-text reader before the Ctrl+C fallback and warmed up UIA bindings after startup. |
 | Tone-first generation | Pass | AI generation starts only after a left-click tone selection. Hotkey handling shows the tone palette only after capture succeeds. |
-| Ollama rewrite payload | Pass | Ollama requests use `stream: false`, JSON format, `think: false`, and an intent-analysis prompt before final rewriting. |
+| OpenAI rewrite payload | Pass | OpenAI-compatible requests use the Responses API shape, a strict JSON schema, and a tone-filled concise system prompt. |
 | Screenshot: selected text retained | Pass | `sources/screenshots/capture-worker-tone-palette.png` shows the selected sample phrase still highlighted with the tone palette open. |
 | Screenshot: single generation panel | Pass | `sources/screenshots/generation-panel-options.png` shows one side panel with three rewrite options, check icons, and a recycle icon. |
 | Focus-safe paste path | Pass | Replacement now avoids refocusing when the target app is still foreground and stores the focused control handle for fallback focus restore. |
@@ -56,10 +57,10 @@ Test date: 2026-05-16
 - Replaced normal focus-stealing Tk dialogs with a non-activating context-menu-style palette.
 - Added side-by-side tone menu and generation panel.
 - Added check icons for replacement and a recycle icon for regeneration.
-- Updated the recommended local AI model to `qwen3.5:9b` through Ollama, with fallback when Ollama is unavailable.
-- Updated the Ollama prompt so it analyzes intent, message type, protected terms, and grammar issues before producing the three rewrite options.
-- Added optional install-time `qwen3.5:9b` download through the official `ollama pull` command.
-- Added installer switches: `-PullModel`, `-SkipModelPrompt`, and `-InstallOllamaWithWinget`.
+- Removed the Ollama/Qwen AI path and install-time model download.
+- Added tray `Settings` for provider, model, API key, OpenAI-compatible base URL, and system prompt.
+- Added a concise tone-aware system prompt template generated from the prompt-engineering workflow.
+- Added ignored `config.local.json` for local API key storage.
 - Moved implementation files into `source\` and added parent-folder install wrappers.
 - Fixed parent `install.ps1` wrapper so switch parameters are forwarded by name instead of accidentally becoming the Ollama model argument.
 - Removed the old parent `.venv` after confirming the new `source\.venv` install, startup shortcut, app startup, and live replacement flow worked.

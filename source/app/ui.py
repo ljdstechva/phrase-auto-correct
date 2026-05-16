@@ -6,7 +6,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from typing import Callable
 
-from .config import SUPPORTED_TONES
+from .config import AppConfig, SUPPORTED_TONES
 from .windows_api import get_cursor_position, make_window_no_activate
 
 
@@ -29,6 +29,7 @@ class PopupUI:
         self.shell: tk.Frame | None = None
         self.tone_frame: tk.Frame | None = None
         self.generation_frame: tk.Frame | None = None
+        self.settings_window: tk.Toplevel | None = None
         self.selected_tone: str | None = None
         self.anchor: tuple[int, int] | None = None
         self._configure_style()
@@ -204,6 +205,142 @@ class PopupUI:
             parent=self.root,
         )
 
+    def show_settings(
+        self,
+        config: AppConfig,
+        on_save: Callable[[dict[str, str]], None],
+    ) -> None:
+        """Show editable AI provider settings from the tray menu."""
+
+        if self.settings_window and self.settings_window.winfo_exists():
+            self.settings_window.lift()
+            self.settings_window.focus_force()
+            return
+
+        window = tk.Toplevel(self.root)
+        self.settings_window = window
+        window.title("Phrase Auto-correct Settings")
+        window.resizable(False, False)
+        window.configure(bg=BG)
+        window.attributes("-topmost", True)
+        window.protocol("WM_DELETE_WINDOW", window.destroy)
+
+        frame = tk.Frame(window, bg=BG, padx=16, pady=14)
+        frame.pack(fill="both", expand=True)
+
+        tk.Label(
+            frame,
+            text="AI Settings",
+            bg=BG,
+            fg=TEXT,
+            font=("Segoe UI", 12, "bold"),
+            anchor="w",
+        ).grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+
+        provider = tk.StringVar(value=config.ai_provider)
+        model = tk.StringVar(value=config.openai_model)
+        api_key = tk.StringVar(value=config.openai_api_key)
+        base_url = tk.StringVar(value=config.openai_base_url)
+
+        self._settings_label(frame, "Provider").grid(row=1, column=0, sticky="w")
+        provider_box = ttk.Combobox(
+            frame,
+            textvariable=provider,
+            values=("openai", "fallback"),
+            state="readonly",
+            width=36,
+        )
+        provider_box.grid(row=1, column=1, sticky="ew", pady=4)
+
+        self._settings_label(frame, "Model").grid(row=2, column=0, sticky="w")
+        tk.Entry(frame, textvariable=model, width=40).grid(
+            row=2,
+            column=1,
+            sticky="ew",
+            pady=4,
+        )
+
+        self._settings_label(frame, "API key").grid(row=3, column=0, sticky="w")
+        tk.Entry(frame, textvariable=api_key, width=40, show="*").grid(
+            row=3,
+            column=1,
+            sticky="ew",
+            pady=4,
+        )
+
+        self._settings_label(frame, "Base URL").grid(row=4, column=0, sticky="w")
+        tk.Entry(frame, textvariable=base_url, width=40).grid(
+            row=4,
+            column=1,
+            sticky="ew",
+            pady=4,
+        )
+
+        self._settings_label(frame, "System prompt").grid(
+            row=5,
+            column=0,
+            sticky="nw",
+            pady=(8, 0),
+        )
+        prompt = tk.Text(
+            frame,
+            width=58,
+            height=7,
+            wrap="word",
+            font=("Segoe UI", 9),
+        )
+        prompt.grid(row=5, column=1, sticky="ew", pady=(8, 4))
+        prompt.insert("1.0", config.system_prompt)
+
+        buttons = tk.Frame(frame, bg=BG)
+        buttons.grid(row=6, column=0, columnspan=2, sticky="e", pady=(12, 0))
+
+        def save() -> None:
+            on_save(
+                {
+                    "ai_provider": provider.get(),
+                    "openai_model": model.get(),
+                    "openai_api_key": api_key.get(),
+                    "openai_base_url": base_url.get(),
+                    "system_prompt": prompt.get("1.0", "end-1c"),
+                }
+            )
+            window.destroy()
+            messagebox.showinfo(
+                "Phrase Auto-correct",
+                "Settings saved.",
+                parent=self.root,
+            )
+
+        tk.Button(
+            buttons,
+            text="Cancel",
+            command=window.destroy,
+            width=10,
+        ).pack(side="right", padx=(8, 0))
+        tk.Button(
+            buttons,
+            text="Save",
+            command=save,
+            width=10,
+            bg=ACCENT,
+            fg="white",
+            activebackground="#1d4ed8",
+            activeforeground="white",
+        ).pack(side="right")
+
+        frame.columnconfigure(1, weight=1)
+        window.update_idletasks()
+        x = (window.winfo_screenwidth() - window.winfo_reqwidth()) // 2
+        y = (window.winfo_screenheight() - window.winfo_reqheight()) // 2
+        window.geometry(f"+{max(20, x)}+{max(20, y)}")
+        window.lift()
+        window.focus_force()
+        window.after(
+            1200,
+            lambda: window.winfo_exists() and window.attributes("-topmost", False),
+        )
+
     def _build_tone_menu(
         self,
         frame: tk.Frame,
@@ -313,6 +450,18 @@ class PopupUI:
             activebackground=SURFACE_HOVER,
             activeforeground=TEXT,
             font=("Segoe UI Symbol", 11, "bold"),
+        )
+
+    def _settings_label(self, parent: tk.Frame, text: str) -> tk.Label:
+        return tk.Label(
+            parent,
+            text=text,
+            bg=BG,
+            fg=TEXT,
+            font=("Segoe UI", 9),
+            anchor="w",
+            padx=0,
+            pady=2,
         )
 
     def _make_palette(self, on_close: Callable[[], None]) -> tk.Toplevel:
